@@ -1,0 +1,668 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.ratepay.sdk</groupId>
+    <artifactId>ratepay-sdk-parent</artifactId>
+    <version>1.9.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Ratepay SDK (Parent)</name>
+    <description>
+        Contract-driven client library wrapping Ratepay Payments API v2.
+    </description>
+    <url>https://github.com/ratepay/ratepay-sdk</url>
+
+    <!--
+    TODO(central): CONFIRM THE LICENSE before the first public release.
+    This value ends up in the public artifact and cannot be changed silently
+    afterwards. Placeholder below is a guess flagged in QUESTIONS.md.
+    -->
+    <licenses>
+        <license>
+            <name>Apache-2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <!-- Company identity + team alias only (no individual contributors). -->
+    <developers>
+        <developer>
+            <id>ratepay-sdk-team</id>
+            <name>Ratepay SDK Team</name>
+            <organization>Ratepay GmbH</organization>
+            <organizationUrl>https://www.ratepay.com</organizationUrl>
+            <!-- TODO(central): confirm the team distribution-list address. -->
+            <email>integration@ratepay.com</email>
+        </developer>
+    </developers>
+
+    <!--
+        TODO(central): the public mirror may live at a different URL/coordinates.
+        Update scm + url when the mirror exists (see QUESTIONS.md).
+    -->
+    <scm>
+        <connection>scm:git:https://github.com/ratepay/ratepay-sdk.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/ratepay/ratepay-sdk.git</developerConnection>
+        <url>https://github.com/ratepay/ratepay-sdk</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <modules>
+        <module>ratepay-sdk-model</module>
+        <module>ratepay-sdk-core</module>
+    </modules>
+
+    <distributionManagement>
+        <repository>
+            <id>deployment</id>
+            <name>Internal Releases</name>
+            <url>https://nexus.intern.ratepay.com/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>deployment</id>
+            <name>Internal Snapshots</name>
+            <url>https://nexus.intern.ratepay.com/content/repositories/snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Language / runtime baselines (Phase 0 agreement) -->
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <kotlin.version>2.4.10</kotlin.version>
+        <kotlin.compiler.jvmTarget>17</kotlin.compiler.jvmTarget>
+
+        <!-- Build tooling -->
+        <maven.min.version>3.9.0</maven.min.version>
+
+        <!-- Dependency versions -->
+        <jackson.version>2.22.1</jackson.version>
+        <junit.version>6.1.3</junit.version>
+        <json-unit.version>6.2.0</json-unit.version>
+
+        <!-- Plugin versions -->
+        <ktlint.plugin.version>3.1.1</ktlint.plugin.version>
+        <ktlint.version>1.1.0</ktlint.version>
+        <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+        <license-maven-plugin.version>5.1.1</license-maven-plugin.version>
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <sonar-maven-plugin.version>5.7.0.6970</sonar-maven-plugin.version>
+        <!-- Release/publish plugin versions (used by the `release` profile) -->
+        <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
+        <dokka-maven-plugin.version>2.2.0</dokka-maven-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+
+        <revapi-maven-plugin.version>0.15.1</revapi-maven-plugin.version>
+        <revapi-java.version>0.28.4</revapi-java.version>
+        <revapi-reporter-text.version>0.15.1</revapi-reporter-text.version>
+        <revapi.skip>true</revapi.skip>
+
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.basedir}/target/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
+
+        <!--
+            Coverage is excluded for boilerplate/DTO types that carry no meaningful logic to
+            test (data classes, enums, interfaces, exception types)
+        -->
+        <sonar.coverage.exclusions>
+            <!-- Model DTOs: data classes, no behavior -->
+            **/model/transaction/**,
+            **/model/error/**,
+            <!-- Generated DTOs from the Payment API and SECCI specs: data classes, no behavior -->
+            **/model/api/payment/**,
+            **/model/api/secci/**,
+            <!-- Internal OAuth client-credentials request/response DTOs -->
+            **/internal/auth/Token.kt,
+            <!-- HTTP method enum -->
+            **/http/HttpMethod.kt,
+            <!-- HTTP request data class DTO -->
+            **/http/HttpRequest.kt,
+            <!-- HTTP transport interface: no executable body -->
+            **/http/HttpTransport.kt,
+            <!-- Exceptions-->
+            **/exception/RatepayException.kt,
+            **/exception/RatepayNetworkException.kt
+        </sonar.coverage.exclusions>
+
+        <!--
+            Rules that cannot be satisfied by the OpenAPI-generated DTOs under **/model/api/**.
+            These files are machine generated from the pinned Payment API spec (see
+            ratepay-sdk-model/codegen) and regenerated wholesale whenever the spec changes.
+
+            - kotlin:S103  (line length)     generated KDoc reproduces the spec's `description`
+                                             values verbatim; some exceed 200 chars and cannot be
+                                             wrapped without dropping the public API documentation.
+            - kotlin:S1133 (deprecated code) the spec marks
+                                             `payment_details.ratepay_payment_reference` deprecated;
+                                             the annotation is correct and must stay.
+            - kotlin:S1128 / sonar-detekt:NoUnusedImports (unused import)
+                                             the stock kotlin-client templates emit the
+                                             JsonEnumDefaultValue/JsonValue imports on every data
+                                             class; suppressing them would mean maintaining another
+                                             patched upstream template for zero runtime benefit.
+        -->
+        <sonar.issue.ignore.multicriteria>generatedLineLength,generatedDeprecation,generatedUnusedImport,generatedUnusedImportDetekt</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.generatedLineLength.ruleKey>kotlin:S103</sonar.issue.ignore.multicriteria.generatedLineLength.ruleKey>
+        <sonar.issue.ignore.multicriteria.generatedLineLength.resourceKey>**/model/api/**</sonar.issue.ignore.multicriteria.generatedLineLength.resourceKey>
+        <sonar.issue.ignore.multicriteria.generatedDeprecation.ruleKey>kotlin:S1133</sonar.issue.ignore.multicriteria.generatedDeprecation.ruleKey>
+        <sonar.issue.ignore.multicriteria.generatedDeprecation.resourceKey>**/model/api/**</sonar.issue.ignore.multicriteria.generatedDeprecation.resourceKey>
+        <sonar.issue.ignore.multicriteria.generatedUnusedImport.ruleKey>kotlin:S1128</sonar.issue.ignore.multicriteria.generatedUnusedImport.ruleKey>
+        <sonar.issue.ignore.multicriteria.generatedUnusedImport.resourceKey>**/model/api/**</sonar.issue.ignore.multicriteria.generatedUnusedImport.resourceKey>
+        <sonar.issue.ignore.multicriteria.generatedUnusedImportDetekt.ruleKey>sonar-detekt:NoUnusedImports</sonar.issue.ignore.multicriteria.generatedUnusedImportDetekt.ruleKey>
+        <sonar.issue.ignore.multicriteria.generatedUnusedImportDetekt.resourceKey>**/model/api/**</sonar.issue.ignore.multicriteria.generatedUnusedImportDetekt.resourceKey>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Kotlin BOM aligns stdlib / reflect versions -->
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-bom</artifactId>
+                <version>${kotlin.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Jackson BOM aligns all Jackson artifacts -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- JUnit 5 BOM for tests -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- json-unit for readable, order-insensitive JSON assertions (pulls in AssertJ) -->
+            <dependency>
+                <groupId>net.javacrumbs.json-unit</groupId>
+                <artifactId>json-unit-assertj</artifactId>
+                <version>${json-unit.version}</version>
+            </dependency>
+
+            <!-- Internal modules -->
+            <dependency>
+                <groupId>com.ratepay.sdk</groupId>
+                <artifactId>ratepay-sdk-model</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ratepay.sdk</groupId>
+                <artifactId>ratepay-sdk-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Kotlin standard library: available to every module -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib</artifactId>
+        </dependency>
+
+        <!-- Test stack shared by every module -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.json-unit</groupId>
+            <artifactId>json-unit-assertj</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
+        <testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
+
+        <pluginManagement>
+            <plugins>
+                <!-- Kotlin compilation -->
+                <plugin>
+                    <groupId>org.jetbrains.kotlin</groupId>
+                    <artifactId>kotlin-maven-plugin</artifactId>
+                    <version>${kotlin.version}</version>
+                    <configuration>
+                        <jvmTarget>${kotlin.compiler.jvmTarget}</jvmTarget>
+                        <args>
+                            <arg>-Xjsr305=strict</arg>
+                        </args>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>compile</id>
+                            <phase>compile</phase>
+                            <goals>
+                                <goal>compile</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>test-compile</id>
+                            <phase>test-compile</phase>
+                            <goals>
+                                <goal>test-compile</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- ktlint: pre-compile style gate -->
+                <plugin>
+                    <groupId>com.github.gantsign.maven</groupId>
+                    <artifactId>ktlint-maven-plugin</artifactId>
+                    <version>${ktlint.plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>ktlint-check</id>
+                            <phase>process-sources</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                    <!-- Pin ktlint runtime -->
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.pinterest.ktlint</groupId>
+                            <artifactId>ktlint-rule-engine</artifactId>
+                            <version>${ktlint.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.pinterest.ktlint</groupId>
+                            <artifactId>ktlint-rule-engine-core</artifactId>
+                            <version>${ktlint.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.pinterest.ktlint</groupId>
+                            <artifactId>ktlint-ruleset-standard</artifactId>
+                            <version>${ktlint.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.pinterest.ktlint</groupId>
+                            <artifactId>ktlint-cli-ruleset-core</artifactId>
+                            <version>${ktlint.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.pinterest.ktlint</groupId>
+                            <artifactId>ktlint-cli-reporter-core</artifactId>
+                            <version>${ktlint.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.pinterest.ktlint</groupId>
+                            <artifactId>ktlint-cli-reporter-plain</artifactId>
+                            <version>${ktlint.version}</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+
+                <plugin>
+                    <groupId>com.mycila</groupId>
+                    <artifactId>license-maven-plugin</artifactId>
+                    <version>${license-maven-plugin.version}</version>
+                    <configuration>
+                        <licenseSets>
+                            <licenseSet>
+                                <header>${maven.multiModuleProjectDirectory}/build-tools/copyright-header.txt</header>
+                                <includes>
+                                    <include>src/**/*.kt</include>
+                                </includes>
+                            </licenseSet>
+                        </licenseSets>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>check-copyright-headers</id>
+                            <phase>process-sources</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Unit tests: test phase -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <!-- Late-bound argLine picks up JaCoCo agent set by prepare-agent -->
+                        <argLine>@{argLine}</argLine>
+                        <!-- Unit tests only; integration tests are handled by Failsafe below -->
+                        <includes>
+                            <include>**/*Test</include>
+                        </includes>
+                        <excludes>
+                            <exclude>**/*IntegrationTest</exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <!-- Integration tests: runs in integration-test / verify phases -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <argLine>@{argLine}</argLine>
+                        <includes>
+                            <include>**/*IntegrationTest</include>
+                        </includes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Code coverage: XML report consumed by sonar:sonar -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-maven-plugin.version}</version>
+                    <executions>
+                        <!-- Instrument Surefire JVM -->
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <!-- Generate XML report after tests -->
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                            <configuration>
+                                <outputDirectory>${project.basedir}/target/site/jacoco</outputDirectory>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Integration tests: runs in integration-test / verify phases -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <argLine>@{argLine}</argLine>
+                        <includes>
+                            <include>**/*IntegrationTest</include>
+                        </includes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven-enforcer-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>com.github.gantsign.maven</groupId>
+                <artifactId>ktlint-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar-maven-plugin.version}</version>
+            </plugin>
+
+            <!-- Enforce Java 17 and Maven baseline for reproducible builds -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-build-environment</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[${maven.min.version},)</version>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>[17,18)</version>
+                                </requireJavaVersion>
+                                <requireProperty>
+                                    <property>project.licenses[0].name</property>
+                                    <message>pom.xml must declare at least one license.</message>
+                                    <regex>.+</regex>
+                                </requireProperty>
+                                <requireProperty>
+                                    <property>project.licenses[0].url</property>
+                                    <message>pom.xml must specify a URL for the declared license.</message>
+                                    <regex>https?://.+</regex>
+                                </requireProperty>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!--
+            `release` profile — everything needed to assemble and sign a
+            publishable, Central-compliant bundle.
+        -->
+        <profile>
+            <id>release</id>
+
+            <build>
+                <plugins>
+                    <!--
+                        -sources.jar. Central requires a sources artifact per
+                        module. jar-no-fork avoids re-running the lifecycle.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!--
+                        -javadoc.jar via Dokka. This is a Kotlin/KDoc codebase,
+                        Dokka's `javadocJar` goal renders KDoc. Required by Central.
+                    -->
+                    <plugin>
+                        <groupId>org.jetbrains.dokka</groupId>
+                        <artifactId>dokka-maven-plugin</artifactId>
+                        <version>${dokka-maven-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>dokka-javadoc-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>javadocJar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!--
+                        GPG-sign every attached artifact (main jar, sources jar,
+                        javadoc jar, and the POM). Central requires a .asc per file.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!--
+                        TODO(central): add the central-publishing-maven-plugin here
+                        (org.sonatype.central:central-publishing-maven-plugin),
+                    -->
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            Binary and source API compatibility check against the latest published release.
+            Activated explicitly in CI: ./mvnw verify -Pbinary-compat
+        -->
+        <profile>
+            <id>binary-compat</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.revapi</groupId>
+                        <artifactId>revapi-maven-plugin</artifactId>
+                        <version>${revapi-maven-plugin.version}</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.revapi</groupId>
+                                <artifactId>revapi-java</artifactId>
+                                <version>${revapi-java.version}</version>
+                            </dependency>
+                            <dependency>
+                                <groupId>org.revapi</groupId>
+                                <artifactId>revapi-reporter-text</artifactId>
+                                <version>${revapi-reporter-text.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <executions>
+                            <execution>
+                                <id>check-api-compatibility</id>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <skip>${revapi.skip}</skip>
+                            <!--
+                                Fail when differences are classified as errors (breaking changes).
+                                POTENTIALLY_BREAKING differences are reported but do not fail the build.
+                            -->
+                            <failCriticality>error</failCriticality>
+                            <failOnUnresolvedArtifacts>true</failOnUnresolvedArtifacts>
+                            <analysisConfigurationFiles>
+                                <configurationFile>
+                                    <path>${maven.multiModuleProjectDirectory}/build-tools/revapi-ignore.json</path>
+                                </configurationFile>
+                            </analysisConfigurationFiles>
+                            <analysisConfiguration>
+                                [
+                                    {
+                                        "extension": "revapi.java",
+                                        "configuration": {
+                                            "filter": {
+                                                "packages": {
+                                                    "regex": true,
+                                                    "exclude": ["com\\.ratepay\\.sdk\\.internal\\..*"]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "extension": "revapi.reporter.text",
+                                        "configuration": {
+                                            "minCriticality": "documented"
+                                        }
+                                    }
+                                ]
+                            </analysisConfiguration>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>
