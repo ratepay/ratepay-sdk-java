@@ -3,21 +3,21 @@
   <groupId>com.ratepay.sdk</groupId>
   <artifactId>ratepay-sdk-model</artifactId>
   <versioning>
-    <lastUpdated>20260917082903</lastUpdated>
+    <lastUpdated>20260917101138</lastUpdated>
     <snapshot>
-      <timestamp>20260917.082903</timestamp>
+      <timestamp>20260917.101138</timestamp>
       <buildNumber>1</buildNumber>
     </snapshot>
     <snapshotVersions>
       <snapshotVersion>
         <extension>pom</extension>
-        <value>1.9.1-20260917.082903-1</value>
-        <updated>20260917082903</updated>
+        <value>1.9.1-20260917.101138-1</value>
+        <updated>20260917101138</updated>
       </snapshotVersion>
       <snapshotVersion>
         <extension>jar</extension>
-        <value>1.9.1-20260917.082903-1</value>
-        <updated>20260917082903</updated>
+        <value>1.9.1-20260917.101138-1</value>
+        <updated>20260917101138</updated>
       </snapshotVersion>
     </snapshotVersions>
   </versioning>
