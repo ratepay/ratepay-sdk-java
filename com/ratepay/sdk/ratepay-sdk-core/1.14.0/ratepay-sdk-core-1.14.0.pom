@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.ratepay.sdk</groupId>
+        <artifactId>ratepay-sdk-parent</artifactId>
+        <version>1.14.0</version>
+    </parent>
+
+    <artifactId>ratepay-sdk-core</artifactId>
+    <name>Ratepay SDK (Core)</name>
+    <description>
+        Behavior layer: HTTP transport abstraction, environment/configuration,
+        and exceptions. Auth, idempotency and the typed client are built on
+        top of Payment API's Open API primitives.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.ratepay.sdk</groupId>
+            <artifactId>ratepay-sdk-model</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-kotlin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>3.13.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>add-integration-test-sources</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/integrationTest/kotlin</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>add-integration-test-resources</id>
+                        <phase>generate-test-resources</phase>
+                        <goals>
+                            <goal>add-test-resource</goal>
+                        </goals>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>src/integrationTest/resources</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!--The -sources.jar rewrite (copy to staging, relocate com.fasterxml.jackson.* text,
+            package as classifier "sources") is configured once in the root pom.xml's `release`
+            profile pluginManagement, since both modules now relocate Jackson the same way. It is
+            declared here so it actually runs for this module, which has a real src/main/kotlin to rewrite. -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <version>${maven-shade-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>shade-fat-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>shade</goal>
+                                </goals>
+                                <configuration>
+                                    <createDependencyReducedPom>true</createDependencyReducedPom>
+                                    <shadedArtifactAttached>false</shadedArtifactAttached>
+                                    <artifactSet>
+                                        <excludes>
+                                            <exclude>com.ratepay.sdk:ratepay-sdk-model</exclude>
+                                            <!-- Kotlin stdlib is not relocated (relocating kotlin.* breaks reflection/
+                                            metadata), so bundling it as-is risks duplicate kotlin.* classes on the
+                                            classpath of Kotlin consumers using a different Kotlin version. Excluding it
+                                            from shading and leave it as a normal transitive dependency instead. -->
+                                            <exclude>org.jetbrains.kotlin:*</exclude>
+                                        </excludes>
+                                    </artifactSet>
+                                    <relocations>
+                                        <relocation>
+                                            <pattern>com.fasterxml.jackson</pattern>
+                                            <shadedPattern>${jackson.shaded.package}</shadedPattern>
+                                            <!-- Relocate all of Jackson, including jackson-annotations, to avoid
+                                            conflicts with any Jackson version the consumer already has, including
+                                            duplicate/incompatible classes. This core module's own JsonMapper is shaded
+                                            consistently along with the model DTOs it reads (ratepay-sdk-model relocates the same way),
+                                            so it still recognizes the relocated annotations on those DTOs.-->
+                                        </relocation>
+                                    </relocations>
+                                    <!-- Updates META-INF/services/* files so they point to the new relocated class names.
+                                    Without this, the files would still refer to the original com.fasterxml.jackson.* classes. -->
+                                    <transformers>
+                                        <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                    </transformers>
+                                    <filters>
+                                        <filter>
+                                            <artifact>*:*</artifact>
+                                            <excludes>
+                                                <exclude>META-INF/*.SF</exclude>
+                                                <exclude>META-INF/*.DSA</exclude>
+                                                <exclude>META-INF/*.RSA</exclude>
+                                            </excludes>
+                                        </filter>
+                                    </filters>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
